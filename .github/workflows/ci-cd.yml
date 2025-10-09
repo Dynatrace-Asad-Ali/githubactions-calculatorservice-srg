@@ -21,35 +21,11 @@ env:
   JAVA_VERSION: '17'
 
 jobs:
-   test-with-oneagent-fixed:
+   checkout-and-build:
     # runs-on: ubuntu-latest
     runs-on: self-hosted
     name: CI/CD with Dynatrace Monitoring
-  on:
-    push:
-      branches: [ main, develop ]
-    pull_request:
-      branches: [ main ]
-    workflow_dispatch:
-      inputs:
-        run_performance_tests:
-          description: 'Run performance tests'
-          required: false
-          type: boolean
-          default: false
 
-  env:
-    DT_TENANT_URL: ${{ secrets.DT_TENANT_URL }}
-    DT_PAAS_TOKEN: ${{ secrets.DT_PAAS_TOKEN }}
-    DT_TENANTTOKEN: ${{ secrets.DT_TENANTTOKEN }}
-    DT_TENANT: ${{ secrets.DT_TENANT }}
-    JAVA_VERSION: '17'
-
-  jobs:
-   Checkout and Performance Tests:
-    # runs-on: ubuntu-latest
-    runs-on: self-hosted
-    name: Checkout and Performance Tests
     
     steps:
       - name: Checkout code
