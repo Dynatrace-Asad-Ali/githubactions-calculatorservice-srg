@@ -603,7 +603,7 @@ jobs:
 
       - name: Upload k6 results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: k6-performance-results
           path: |
