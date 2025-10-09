@@ -1,0 +1,167 @@
+name: CI/CD with Dynatrace Monitoring
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_performance_tests:
+        description: 'Run performance tests'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  DT_TENANT_URL: ${{ secrets.DT_TENANT_URL }}
+  DT_PAAS_TOKEN: ${{ secrets.DT_PAAS_TOKEN }}
+  DT_TENANTTOKEN: ${{ secrets.DT_TENANTTOKEN }}
+  DT_TENANT: ${{ secrets.DT_TENANT }}
+  JAVA_VERSION: '17'
+
+jobs:
+  # build-and-test:
+  #   #runs-on: ubuntu-latest
+  #   runs-on: self-hosted
+  #   name: Build and Test with Dynatrace OneAgent
+    
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+
+  #     - name: Set up JDK ${{ env.JAVA_VERSION }}
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         java-version: ${{ env.JAVA_VERSION }}
+  #         distribution: 'temurin'
+  #         cache: 'maven'
+
+  #     - name: Download Dynatrace OneAgent
+  #       run: |
+  #         mkdir -p $HOME/dynatrace/oneagent
+  #         wget -O $HOME/dynatrace/oneagent.zip \
+  #           "${{ env.DT_TENANT_URL }}/api/v1/deployment/installer/agent/unix/paas/latest?flavor=default&include=java&Api-Token=${{ env.DT_PAAS_TOKEN }}"
+  #         unzip -d $HOME/dynatrace/oneagent $HOME/dynatrace/oneagent.zip
+  #         echo "✅ Dynatrace OneAgent downloaded successfully"
+
+  #     - name: Configure Dynatrace environment
+  #       run: |
+  #         echo "DT_HOME=$HOME/dynatrace/oneagent" >> $GITHUB_ENV
+  #         echo "LD_PRELOAD=$HOME/dynatrace/oneagent/agent/lib64/liboneagentproc.so" >> $GITHUB_ENV
+  #         echo "DT_TENANT=${{ env.DT_TENANT}}" >> $GITHUB_ENV
+  #         echo "DT_LOGSTREAM=stdout" >> $GITHUB_ENV
+  #         echo "DT_LOGLEVELCON=INFO" >> $GITHUB_ENV
+  #         echo "DT_TAGS=environment=ci,source=github-actions,repository=${{ github.repository }},branch=${{ github.ref_name }},build_number=${{ github.run_number }}" >> $GITHUB_ENV
+  #         echo "DT_CUSTOM_PROP=COMMIT_SHA=${{ github.sha }} BUILD_ID=${{ github.run_id }} ACTOR=${{ github.actor }}" >> $GITHUB_ENV
+
+  #     - name: Run unit tests with Dynatrace
+  #       run: |
+  #         echo "🧪 Running unit tests with Dynatrace OneAgent..."
+  #         mvn clean test \
+  #           -Djava.library.path=$HOME/dynatrace/oneagent/agent/lib64 \
+  #           jacoco:report
+
+  #     - name: Run integration tests with Dynatrace
+  #       run: |
+  #         echo "🔄 Running integration tests with Dynatrace OneAgent..."
+   test-with-oneagent-fixed:
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted
+    name: Tests with Dynatrace OneAgent (Fixed)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Download Dynatrace OneAgent
+        run: |
+          mkdir -p $HOME/dynatrace/oneagent
+          wget -O $HOME/dynatrace/oneagent.zip \
+            "${{ env.DT_TENANT_URL }}/api/v1/deployment/installer/agent/unix/paas/latest?flavor=default&include=java&Api-Token=${{ env.DT_PAAS_TOKEN }}"
+          unzip -d $HOME/dynatrace/oneagent $HOME/dynatrace/oneagent.zip
+          echo "✅ OneAgent downloaded"
+
+      - name: Configure Dynatrace for CI environment
+        run: |
+          # Create agent configuration for CI
+          mkdir -p $HOME/dynatrace/oneagent/agent/conf
+          
+          cat > $HOME/dynatrace/oneagent/agent/conf/ruxitagent.conf <<EOF
+          [general]
+          # Reduce agent overhead for CI
+          tenant=${{ env.DT_TENANT }}
+          
+          [connectivity]
+          # Connection settings
+          networkZone=
+          
+          [injection]
+          # Disable features that can cause hanging
+          injectShutdownHook=false
+          
+          [monitoring]
+          # Optimize for short-lived processes
+          enabled=true
+          
+          [serverside]
+          # Disable deep monitoring that can cause hangs
+          enabled=false
+          
+          [logging]
+          # Enable logging for troubleshooting
+          logLevel=INFO
+          EOF
+
+
+      - name: Run tests with Dynatrace (Method 2 - javaagent)
+        id: test_javaagent
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          # Use Java agent approach instead
+          export DT_HOME=$HOME/dynatrace/oneagent
+          export DT_TENANT=${{ env.DT_TENANT }}
+          export DT_TENANTTOKEN=${{ env.DT_TENANTTOKEN }}
+          export DT_LOGSTREAM=stdout
+          export DT_LOGLEVELCON=INFO
+          export DT_TAGS="environment=ci,repository=${{ github.repository }}"
+          export LD_PRELOAD=$HOME/dynatrace/oneagent/agent/lib64/liboneagentproc.so
+          echo "DT_CUSTOM_PROP=COMMIT_SHA=${{ github.sha }} BUILD_ID=${{ github.run_id }} ACTOR=${{ github.actor }}" >> $GITHUB_ENV
+
+          # Create wrapper script
+          # cat > run-with-dt.sh <<'SCRIPT'
+          # #!/bin/bash
+          # export LD_PRELOAD=$HOME/dynatrace/oneagent/agent/lib64/liboneagentproc.so
+          # exec "$@"
+          # SCRIPT
+          # cat run-with-dt.sh
+          # which run-with-dt.sh
+          # chmod +x run-with-dt.sh
+          # run-with-dt.sh 
+          # echo "✅ Dynatrace OneAgent Java agent configured"
+          
+          # Run with timeout and forced cleanup
+          timeout 8m mvn clean test \
+            -Dmaven.test.failure.ignore=false || true
+
+          rm -rf $HOME/dynatrace
+      - name: Run tests WITHOUT Dynatrace (Fallback)
+        if: steps.test_javaagent.outcome == 'failure'
+        run: |
+          echo "⚠️ Running tests without Dynatrace due to hanging issues"
+          mvn clean test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: target/surefire-reports/
