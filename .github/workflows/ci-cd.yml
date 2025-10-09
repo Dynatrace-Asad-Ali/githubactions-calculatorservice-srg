@@ -38,6 +38,111 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Build application
+        run: |
+          echo "🏗️ Building Spring Boot application..."
+          mvn package -DskipTests
+          
+          # Display build info
+          echo "✅ Build completed successfully"
+          ls -lh target/*.jar
+          
+          # Extract version info
+          APP_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "Application version: $APP_VERSION"
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+      - name: Rename artifact with version
+        run: |
+          cd target
+          # Find the JAR file
+          JAR_FILE=$(ls *.jar | grep -v original)
+          
+          # Create versioned filename
+          VERSIONED_NAME="simple-app-${{ env.APP_VERSION }}-build-${{ github.run_number }}.jar"
+          
+          # Copy with versioned name
+          cp $JAR_FILE $VERSIONED_NAME
+          
+          echo "✅ Created versioned artifact: $VERSIONED_NAME"
+          echo "ARTIFACT_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
+
+      - name: Generate build metadata
+        run: |
+          cat > target/build-info.json <<EOF
+          {
+            "version": "${{ env.APP_VERSION }}",
+            "buildNumber": "${{ github.run_number }}",
+            "buildId": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "repository": "${{ github.repository }}",
+            "buildTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "actor": "${{ github.actor }}",
+            "workflow": "${{ github.workflow }}",
+            "event": "${{ github.event_name }}"
+          }
+          EOF
+          
+          echo "✅ Build metadata generated"
+          cat target/build-info.json
+
+      - name: Calculate JAR checksums
+        run: |
+          cd target
+          sha256sum *.jar > checksums.txt
+          md5sum *.jar >> checksums.txt
+          
+          echo "✅ Checksums calculated"
+          cat checksums.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: application-jar
+          path: target/*.jar
+          retention-days: 30
+
+      - name: Upload versioned artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            target/${{ env.ARTIFACT_NAME }}
+            target/build-info.json
+            target/checksums.txt
+          retention-days: 90
+
+      - name: Create build summary
+        run: |
+          echo "## 🏗️ Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application:** simple-app" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ env.APP_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifact:** \`${{ env.ARTIFACT_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get JAR size
+          JAR_SIZE=$(ls -lh target/${{ env.ARTIFACT_NAME }} | awk '{print $5}')
+          echo "**Artifact Size:** $JAR_SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 📦 Build Metadata" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Actor | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Time | $(date -u +%Y-%m-%dT%H:%M:%SZ) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### 🔐 Checksums" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat target/checksums.txt | grep ${{ env.ARTIFACT_NAME }} >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
       - name: Download application artifact
         uses: actions/download-artifact@v4
         with:
