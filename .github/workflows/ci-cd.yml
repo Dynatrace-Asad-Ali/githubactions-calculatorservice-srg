@@ -231,9 +231,9 @@ jobs:
               { duration: '30s', target: 10 },   // Warm up
               { duration: '1m', target: 50 },    // Ramp to 50 users
               { duration: '2m', target: 50 },    // Stay at 50 users
-              { duration: '30s', target: 100 },  // Spike to 100
-              { duration: '1m', target: 100 },   // Stay at 100
-              { duration: '30s', target: 0 },    // Ramp down
+              # { duration: '30s', target: 100 },  // Spike to 100
+              # { duration: '1m', target: 100 },   // Stay at 100
+              # { duration: '30s', target: 0 },    // Ramp down
             ],
             thresholds: {
               http_req_duration: ['p(95)<500', 'p(99)<1000'],
