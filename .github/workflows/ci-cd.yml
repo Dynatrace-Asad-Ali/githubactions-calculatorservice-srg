@@ -20,7 +20,7 @@ env:
   DT_TENANT: ${{ secrets.DT_TENANT }}
   JAVA_VERSION: '17'
 
-jobs:
+jobs: 
    checkout-and-build:
     # runs-on: ubuntu-latest
     runs-on: self-hosted
@@ -149,6 +149,10 @@ jobs:
           name: application-jar
           path: target/
 
+    performance-test:
+      needs: checkout-and-build
+      runs-on: self-hosted
+      steps: 
       - name: Download Dynatrace OneAgent
         run: |
           mkdir -p $HOME/dynatrace/oneagent
