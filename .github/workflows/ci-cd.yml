@@ -149,7 +149,7 @@ jobs:
           name: application-jar
           path: target/
 
-    performance-test:
+   performance-test:
       needs: checkout-and-build
       runs-on: self-hosted
       steps: 
