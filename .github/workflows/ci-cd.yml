@@ -24,7 +24,7 @@ jobs:
    checkout-and-build:
     # runs-on: ubuntu-latest
     runs-on: self-hosted
-    name: CI/CD with Dynatrace Monitoring
+    name: Checkout and Build
 
     
     steps:
@@ -753,7 +753,6 @@ jobs:
     name: Dynatrace Quality Gate
     runs-on: self-hosted
     needs: performance-test
-    if: github.ref == 'refs/heads/develop'
     
     steps:
       - name: Checkout code
