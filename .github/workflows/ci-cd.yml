@@ -749,3 +749,179 @@ jobs:
               
               const comment = `## 🚀 k6 Performance Test Results
               
+   quality-gate:
+    name: Dynatrace Quality Gate
+    runs-on: self-hosted
+    needs: performance-test
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trigger Dynatrace SRG Validation
+        id: srg-trigger
+        run: |
+          echo "Triggering Dynatrace Site Reliability Guardian validation..."
+          
+          # Trigger SRG validation
+          RESPONSE=$(curl -X POST "${{ secrets.DT_URL }}/api/v2/guardian/validations" \
+            -H "Authorization: Api-Token ${{ secrets.DT_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "guardianIdentifier": "Simple App SRG",
+              "timeframe": {
+                "from": "now-10m",
+                "to": "now"
+              },
+              "entitySelector": "type(SERVICE),tag(environment:staging)",
+              "metadata": {
+                "source": "GitHub Actions",
+                "repository": "${{ github.repository }}",
+                "branch": "${{ github.ref_name }}",
+                "commit": "${{ github.sha }}",
+                "run_id": "${{ github.run_id }}"
+              }
+            }')
+          
+          echo "Response: $RESPONSE"
+          
+          # Extract validation ID
+          VALIDATION_ID=$(echo $RESPONSE | jq -r '.validationId // .id')
+          
+          if [ -z "$VALIDATION_ID" ] || [ "$VALIDATION_ID" = "null" ]; then
+            echo "Failed to trigger SRG validation"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+          
+          echo "validation_id=$VALIDATION_ID" >> $GITHUB_OUTPUT
+          echo "✅ SRG validation triggered with ID: $VALIDATION_ID"
+
+      - name: Wait for SRG Validation Results
+        id: srg-wait
+        run: |
+          VALIDATION_ID="${{ steps.srg-trigger.outputs.validation_id }}"
+          MAX_WAIT_TIME=300  # 5 minutes
+          POLL_INTERVAL=10   # 10 seconds
+          ELAPSED_TIME=0
+          
+          echo "Waiting for SRG validation results (ID: $VALIDATION_ID)..."
+          
+          while [ $ELAPSED_TIME -lt $MAX_WAIT_TIME ]; do
+            # Poll for validation status
+            RESULT=$(curl -s -X GET "${{ secrets.DT_URL }}/api/v2/guardian/validations/$VALIDATION_ID" \
+              -H "Authorization: Api-Token ${{ secrets.DT_API_TOKEN }}")
+            
+            STATUS=$(echo $RESULT | jq -r '.state // .status')
+            
+            echo "Current status: $STATUS (${ELAPSED_TIME}s elapsed)"
+            
+            # Check if validation is complete
+            if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "FINISHED" ] || [ "$STATUS" = "SUCCESS" ] || [ "$STATUS" = "FAILED" ]; then
+              echo "✅ Validation completed!"
+              echo "result=$RESULT" >> $GITHUB_OUTPUT
+              break
+            fi
+            
+            # Check if validation failed or errored
+            if [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "TIMEOUT" ]; then
+              echo "❌ Validation failed with status: $STATUS"
+              echo "result=$RESULT" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            
+            sleep $POLL_INTERVAL
+            ELAPSED_TIME=$((ELAPSED_TIME + POLL_INTERVAL))
+          done
+          
+          if [ $ELAPSED_TIME -ge $MAX_WAIT_TIME ]; then
+            echo "❌ Timeout waiting for validation results"
+            exit 1
+          fi
+
+      - name: Parse and Display SRG Results
+        id: srg-results
+        run: |
+          RESULT='${{ steps.srg-wait.outputs.result }}'
+          
+          echo "=== Dynatrace SRG Validation Results ==="
+          echo ""
+          
+          # Extract key information
+          OVERALL_STATUS=$(echo $RESULT | jq -r '.result // .overallResult')
+          SCORE=$(echo $RESULT | jq -r '.score // "N/A"')
+          VALIDATION_ID="${{ steps.srg-trigger.outputs.validation_id }}"
+          
+          echo "📊 Overall Status: $OVERALL_STATUS"
+          echo "🎯 Score: $SCORE"
+          echo "🆔 Validation ID: $VALIDATION_ID"
+          echo ""
+          
+          # Parse objective results
+          echo "📋 Objective Results:"
+          echo $RESULT | jq -r '.objectives[]? | "  - \(.name // .objectiveName): \(.result // .status) (Score: \(.score // "N/A"))"' || echo "  No objectives found"
+          echo ""
+          
+          # Parse target results
+          echo "🎯 Target Results:"
+          echo $RESULT | jq -r '.targets[]? | "  - \(.name // .targetName): \(.value // "N/A") (\(.status // .result))"' || echo "  No targets found"
+          echo ""
+          
+          # Display violated targets if any
+          VIOLATED=$(echo $RESULT | jq -r '.targets[]? | select(.status == "FAILED" or .result == "FAILED") | .name // .targetName' 2>/dev/null)
+          if [ ! -z "$VIOLATED" ]; then
+            echo "⚠️  Violated Targets:"
+            echo "$VIOLATED" | while read target; do
+              echo "  - $target"
+            done
+            echo ""
+          fi
+          
+          # Save outputs
+          echo "status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+          echo "score=$SCORE" >> $GITHUB_OUTPUT
+          
+          # Create summary for GitHub Actions
+          echo "## 🔍 Dynatrace SRG Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: $OVERALL_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Score**: $SCORE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Validation ID**: $VALIDATION_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: Staging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add detailed results to summary
+          echo "### Detailed Results" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo $RESULT | jq '.' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Evaluate Quality Gate
+        run: |
+          STATUS="${{ steps.srg-results.outputs.status }}"
+          SCORE="${{ steps.srg-results.outputs.score }}"
+          
+          echo "Evaluating quality gate..."
+          echo "Status: $STATUS"
+          echo "Score: $SCORE"
+          
+          # Fail the job if quality gate didn't pass
+          if [ "$STATUS" != "PASSED" ] && [ "$STATUS" != "SUCCESS" ] && [ "$STATUS" != "COMPLETED" ]; then
+            echo "❌ Quality gate FAILED!"
+            echo "The deployment does not meet the required quality standards."
+            exit 1
+          fi
+          
+          echo "✅ Quality gate PASSED!"
+          echo "The deployment meets all quality standards."
+
+      - name: Upload SRG Results as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynatrace-srg-results
+          path: |
+            ${{ steps.srg-wait.outputs.result }}
+          retention-days: 30
+
