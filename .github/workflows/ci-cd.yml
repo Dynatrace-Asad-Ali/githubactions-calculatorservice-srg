@@ -751,6 +751,7 @@ jobs:
 
    test:
       runs-on: ubuntu-latest
+      needs: performance-test
       outputs:
         startTime: ${{ steps.set-start-end-time.outputs.startTime }}
         endTime: ${{ steps.set-start-end-time.outputs.endTime }}
