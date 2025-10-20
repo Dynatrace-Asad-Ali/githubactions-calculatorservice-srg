@@ -748,20 +748,42 @@ jobs:
               
               const comment = `## 🚀 k6 Performance Test Results
               
-   quality-gate:
-    name: Dynatrace Quality Gate
-    runs-on: self-hosted
-    needs: performance-test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Trigger SRG Evaluation
-        id: srg-trigger
-        run: |
-          wget -O dta https://github.com/dynatrace-ace/dynatrace-automation-tools/releases/download/v1.0.0/dta-linux-x64
-          chmod +rx ./dta
-          RESULT=$(./dta srg evaluate --service "simple-app" --stage "QA")
-          echo "validation_id=$(echo $RESULT 
+   test:
+      runs-on: ubuntu-latest
+      outputs:
+        startTime: ${{ steps.set-start-end-time.outputs.startTime }}
+        endTime: ${{ steps.set-start-end-time.outputs.endTime }}
+      steps:
+        - name: "Set start/end time for evaluation"
+          id: set-start-end-time
+          run: |
+            start=$(date -d '10 minute ago' --utc +%FT%TZ)
+            echo "startTime=$start" >> $GITHUB_OUTPUT
+            end=$(date --utc +%FT%TZ)
+            echo "endTime=$end" >> $GITHUB_OUTPUT
+
+   evaluation:
+      needs: test
+      runs-on: ubuntu-latest
+      container:
+        image: "dynatraceace/dt-automation-cli:latest"
+      steps:
+        - name: "Run SRG evaluation"
+          run: |
+            dta srg evaluate
+          env:
+            LOG_LEVEL: "verbose"
+            DYNATRACE_URL_GEN3: ${{ secrets.DT_TENANT_URL }}
+            ACCOUNT_URN: ${{ secrets.ACCOUNT_URN }}
+            DYNATRACE_CLIENT_ID: ${{ secrets.DYNATRACE_CLIENT_ID }}
+            DYNATRACE_SECRET: ${{ secrets.DYNATRACE_SECRET }}
+            DYNATRACE_SSO_URL: ${{ secrets.DYNATRACE_SSO_URL }}
+            SRG_EVALUATION_STOP_ON_FAILURE: "true"
+            SRG_EVALUATION_SERVICE: "sample-app"
+            SRG_EVALUATION_STAGE: "QA"
+            SRG_EVALUATION_START_TIME: "${{ needs.test.outputs.startTime }}"
+            SRG_EVALUATION_END_TIME: "${{ needs.test.outputs.endTime }}"
+            SRG_EVALUATION_VERSION: "1.0.0"
+            SRG_EVALUATION_BUILD_ID: "${{ github.run_id }}"
        
