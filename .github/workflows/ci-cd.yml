@@ -22,8 +22,8 @@ env:
 
 jobs: 
    checkout-and-build:
-    # runs-on: ubuntu-latest
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    # runs-on: self-hosted
     name: Checkout and Build
 
     
@@ -151,7 +151,7 @@ jobs:
 
    performance-test:
       needs: checkout-and-build
-      runs-on: self-hosted
+      runs-on: ubuntu-latest
       steps: 
       - name: Download Dynatrace OneAgent
         run: |
