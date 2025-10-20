@@ -774,7 +774,7 @@ jobs:
             dta srg evaluate
           env:
             LOG_LEVEL: "verbose"
-            DYNATRACE_URL_GEN3: ${{ secrets.DT_TENANT_URL }}
+            DYNATRACE_URL_GEN3: ${{ secrets.DYNATRACE_URL_GEN3 }}
             ACCOUNT_URN: ${{ secrets.ACCOUNT_URN }}
             DYNATRACE_CLIENT_ID: ${{ secrets.DYNATRACE_CLIENT_ID }}
             DYNATRACE_SECRET: ${{ secrets.DYNATRACE_SECRET }}
