@@ -22,8 +22,8 @@ env:
 
 jobs: 
    checkout-and-build:
-    runs-on: ubuntu-latest
-    # runs-on: self-hosted
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted
     name: Checkout and Build
 
     
@@ -151,7 +151,9 @@ jobs:
 
    performance-test:
       needs: checkout-and-build
-      runs-on: ubuntu-latest
+      # runs-on: ubuntu-latest
+      runs-on: self-hosted
+
       steps: 
       - name: Download Dynatrace OneAgent
         run: |
@@ -749,7 +751,7 @@ jobs:
               const comment = `## 🚀 k6 Performance Test Results
               
 
-   test:
+   captureTime:
       runs-on: ubuntu-latest
       needs: performance-test
       outputs:
@@ -766,7 +768,7 @@ jobs:
 
    evaluation:
       # SRG evaluation job
-      needs: test
+      needs: captureTime
       runs-on: ubuntu-latest
       container:
         image: "dynatraceace/dt-automation-cli:latest"
