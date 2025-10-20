@@ -765,6 +765,7 @@ jobs:
             echo "endTime=$end" >> $GITHUB_OUTPUT
 
    evaluation:
+      # SRG evaluation job
       needs: test
       runs-on: ubuntu-latest
       container:
