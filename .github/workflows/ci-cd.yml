@@ -44,5 +44,4 @@ jobs:
           SRG_EVALUATION_BUILD_ID: ${{ github.run_id }}
           SRG_EVALUATION_DELAY: 5
         run: |
-          'echo "${{ secrets.DYNATRACE_URL_GEN3 }}" >
           dta srg evaluate
