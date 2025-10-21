@@ -34,7 +34,7 @@ jobs:
           ACCOUNT_URN: ${{ secrets.ACCOUNT_URN }}
           DYNATRACE_CLIENT_ID: ${{ secrets.DYNATRACE_CLIENT_ID }}
           DYNATRACE_SECRET: ${{ secrets.DYNATRACE_SECRET }}
-          DYNATRACE_SSO_URL: ${{ secrets.DYNATRACE_SSO_URL }}
+          # DYNATRACE_SSO_URL: ${{ secrets.DYNATRACE_SSO_URL }}
           SRG_EVALUATION_STOP_ON_FAILURE: "true"
           SRG_EVALUATION_SERVICE: "demo"
           SRG_EVALUATION_STAGE: "dev"
@@ -44,4 +44,5 @@ jobs:
           SRG_EVALUATION_BUILD_ID: ${{ github.run_id }}
           SRG_EVALUATION_DELAY: 5
         run: |
+          'echo "${{ secrets.DYNATRACE_URL_GEN3 }}" >
           dta srg evaluate
