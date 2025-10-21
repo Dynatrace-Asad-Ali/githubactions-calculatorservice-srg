@@ -768,41 +768,43 @@ jobs:
   #           end=$(date --utc +%FT%TZ)
   #           echo "endTime=$end" >> $GITHUB_OUTPUT
 
-   evaluation:
+   captureTime:
       # SRG evaluation job to kyw
       needs: performance-test
       runs-on: ubuntu-latest
-      name: SRG Evaluation
       outputs:
-        startTime: ${{ steps.set-start-end-time.outputs.startTime }}
-        endTime: ${{ steps.set-start-end-time.outputs.endTime }}
-      container:
-        image: "dynatraceace/dt-automation-cli:latest"
+        startTime: ${{ steps.times.outputs.startTime }}
+        endTime: ${{ steps.times.outputs.endTime }}
       steps:
-        - name: Capture start and end time for SRG evaluation
-          id: set-start-end-time
+        - name: Calculate time window
+          id: times
           run: |
-            start=$(date -d '10 minute ago' --utc +%FT%TZ)
-            echo "startTime=$start" >> $GITHUB_OUTPUT
-            end=$(date --utc +%FT%TZ)
-            echo "endTime=$end" >> $GITHUB_OUTPUT
-            
-        - name: "Run SRG evaluation"
-          run: |
-            dta srg evaluate
-
-          env:
-            LOG_LEVEL: "verbose"
-            DYNATRACE_URL_GEN3: ${{ secrets.DYNATRACE_URL_GEN3 }}
-            ACCOUNT_URN: ${{ secrets.ACCOUNT_URN }}
-            DYNATRACE_CLIENT_ID: ${{ secrets.DYNATRACE_CLIENT_ID }}
-            DYNATRACE_SECRET: ${{ secrets.DYNATRACE_SECRET }}
-            DYNATRACE_SSO_URL: ${{ secrets.DYNATRACE_SSO_URL }}
-            SRG_EVALUATION_STOP_ON_FAILURE: "true"
-            SRG_EVALUATION_SERVICE: "simple-app"
-            SRG_EVALUATION_STAGE: "QA"
-            SRG_EVALUATION_START_TIME: "${{ steps.set-start-end-time.outputs.startTime }}"
-            SRG_EVALUATION_END_TIME: "${{ steps.set-start-end-time.outputs.endTime}}"
-            SRG_EVALUATION_VERSION: "1.0.0"
-            SRG_EVALUATION_BUILD_ID: "${{ github.run_id }}"
-       
+            # produce UTC timestamps for the evaluation window
+            START=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)
+            END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "startTime=$START" >> $GITHUB_OUTPUT
+            echo "endTime=$END" >> $GITHUB_OUTPUT
+   evaluation:
+    needs: captureTime
+    runs-on: ubuntu-latest
+    container:
+      image: "dynatraceace/dt-automation-cli:latest"
+    steps:
+      - name: "Run SRG evaluation"
+        env:
+          LOG_LEVEL: "verbose"
+          DYNATRACE_URL_GEN3: ${{ secrets.DYNATRACE_URL_GEN3 }}
+          ACCOUNT_URN: ${{ secrets.ACCOUNT_URN }}
+          DYNATRACE_CLIENT_ID: ${{ secrets.DYNATRACE_CLIENT_ID }}
+          DYNATRACE_SECRET: ${{ secrets.DYNATRACE_SECRET }}
+          DYNATRACE_SSO_URL: ${{ secrets.DYNATRACE_SSO_URL }}
+          SRG_EVALUATION_STOP_ON_FAILURE: "true"
+          SRG_EVALUATION_SERVICE: "demo"
+          SRG_EVALUATION_STAGE: "dev"
+          SRG_EVALUATION_START_TIME: ${{ needs.captureTime.outputs.startTime }}
+          SRG_EVALUATION_END_TIME: ${{ needs.captureTime.outputs.endTime }}
+          SRG_EVALUATION_VERSION: "1.0.0"
+          SRG_EVALUATION_BUILD_ID: ${{ github.run_id }}
+          SRG_EVALUATION_DELAY: 5
+        run: |
+          dta srg evaluate
