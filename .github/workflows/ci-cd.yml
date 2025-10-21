@@ -769,7 +769,7 @@ jobs:
   #           echo "endTime=$end" >> $GITHUB_OUTPUT
 
    evaluation:
-      # SRG evaluation job
+      # SRG evaluation job to kyw
       needs: performance-test
       runs-on: ubuntu-latest
       name: SRG Evaluation
@@ -790,7 +790,7 @@ jobs:
         - name: "Run SRG evaluation"
           run: |
             dta srg evaluate
-            
+
           env:
             LOG_LEVEL: "verbose"
             DYNATRACE_URL_GEN3: ${{ secrets.DYNATRACE_URL_GEN3 }}
