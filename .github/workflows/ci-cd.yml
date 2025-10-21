@@ -789,11 +789,8 @@ jobs:
             
         - name: "Run SRG evaluation"
           run: |
-            echo ${{ secrets.DYNATRACE_URL_GEN3 }}
-            echo ${{ secrets.ACCOUNT_URN }}
-            echo ${{ secrets.DYNATRACE_CLIENT_ID }}
-            echo ${{ secrets.DYNATRACE_SECRET }}
             dta srg evaluate
+            
           env:
             LOG_LEVEL: "verbose"
             DYNATRACE_URL_GEN3: ${{ secrets.DYNATRACE_URL_GEN3 }}
